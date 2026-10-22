@@ -6,7 +6,7 @@ These five ship in the plugin. They run with Claude Code's Workflow tool, so you
 
 > Run the `ops-kit:release-readiness` workflow on `/path/to/repo` and forbid the words "acme" and "internal".
 
-They also show up in the `/` menu as `/ops-kit:<name>`.
+You can also run one by name from the Workflow tool, for example `ops-kit:design-panel`; in a live check after installing the plugin, a dry run by that name was accepted and returned the expected plan with zero agents. They also show up in the `/` menu as `/ops-kit:<name>`, but we haven't confirmed how arguments are passed in that form, so prefer asking in plain words.
 
 **Models.** Bulk stages (scans, researchers, finders, skeptics) default to the `sonnet` alias; the final synthesis stage inherits your session model. Every workflow takes `models` in its args to change that, or `models: null` to inherit everywhere.
 

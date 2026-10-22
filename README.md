@@ -17,6 +17,8 @@
 /plugin install ops-kit@xallindrome-labs
 ```
 
+Install it with those two commands. In our test in the Claude desktop app, a plugin declared only in a project's `.claude/settings.json` (`extraKnownMarketplaces` plus `enabledPlugins`) was **not** installed automatically and gave no prompt, so don't rely on that route. Once installed, each workflow can be run by name, for example `ops-kit:design-panel`, and appears in the Workflow tool's list.
+
 You get the workflows, `/ops-kit:runway`, the `workflow-quote` and `subagent-costs` skills, and the (inactive until configured) phone hooks. Two things a plugin can't ship for you:
 
 - **Force the stop-points to prompt.** Add the rules in [`examples/permissions-ask.json`](examples/permissions-ask.json) to your Claude Code settings, otherwise auto mode can approve a push or deploy without asking.

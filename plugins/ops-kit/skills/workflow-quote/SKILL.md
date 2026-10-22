@@ -9,7 +9,7 @@ A workflow script cannot ask the user anything once it is running, so the only m
 
 ## Before the run
 
-1. Call the workflow with the real arguments plus `dryRun: true`.
+1. Call the workflow by name (for example `ops-kit:design-panel`) with the real arguments plus `dryRun: true`. The numbers come back in the returned `plan` object; the full `PLAN` sentence is in the run's logs (the `logs` list in its output), not in the short completion message.
 2. Tell the user, in plain words:
    - the agent count or range from the `PLAN` line;
    - which model the bulk stages use (the plan line says);
