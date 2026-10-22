@@ -14,7 +14,7 @@ A workflow script cannot ask the user anything once it is running, so the only m
    - the agent count or range from the `PLAN` line;
    - which model the bulk stages use (the plan line says);
    - the **one argument that shrinks the run the most** (the plan line names it), for example `maxPerDimension` for `review-changes` or `verifyCap` for `leak-finder`;
-   - the rule of thumb from the real runs: in the ops-kit test runs each agent reported roughly 80,000 subagent tokens (range 79k to 98k, on Sonnet, reading files and running tools). That is an observation from five runs, not a promise, and the script itself never estimates tokens or dollars.
+   - the rule of thumb from the real runs: in the ops-kit test runs each agent reported roughly 80,000 subagent tokens (range 79k to 98k, on Sonnet, reading files and running tools). That is an observation from six runs, not a promise, and the script itself never estimates tokens or dollars.
 3. Wait for a yes. Skip the wait only if the user has already said to run it without asking.
 
 ## After the run

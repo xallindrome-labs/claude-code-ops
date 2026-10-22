@@ -12,17 +12,18 @@ They also show up in the `/` menu as `/ops-kit:<name>`.
 
 **Cost lines and dry runs.** Every workflow takes `dryRun: true`: it validates the arguments, logs a `PLAN` line (the agent count or range, the models, and the one argument that shrinks the run) and returns without starting an agent. A real run logs the same `PLAN` first and a `DONE` line at the end, and returns a `receipt` of agents launched, by phase, and how many returned nothing. The `workflow-quote` skill tells Claude to dry-run first and wait for your yes. The scripts print **counts only**: they cannot measure tokens, so they never print a token or dollar figure.
 
-**What runs actually cost.** We ran each workflow once with real agents on Sonnet. Agents read files and run tools, so they use far more than a chat message:
+**What runs actually cost.** We ran each workflow with real agents on Sonnet. Agents read files and run tools, so they use far more than a chat message:
 
 | Workflow (input) | Agents | Subagent tokens reported | Per agent | Wall time |
 |---|---|---|---|---|
 | design-panel (one design question) | 9 | 758k | 84k | ~5 min |
 | review-changes (2 commits, 3 dimensions, cap 2) | 14 | 1.11M | 79k | ~1.4 min |
 | release-readiness (a small repo) | 12 | 983k | 82k | ~2.5 min |
-| leak-finder (one site; before the dedupe and cap below) | 29 | 2.37M | 82k | ~4.6 min |
+| leak-finder (one site, all 6 areas; before the dedupe and cap below) | 29 | 2.37M | 82k | ~4.6 min |
+| leak-finder, after the fixes (same site, 2 areas, `verifyCap` 3) | 7 | 622k | 89k | ~3.5 min |
 | plan-my-project, research stage (4 angles) | 6 | 589k | 98k | ~6 min |
 
-Take roughly **80–100k tokens per agent** as a planning figure, and expect a "small" run to cost a million tokens. That is five observations, not a guarantee, and the harness's "reported tokens" may count more than you'd expect, so check your own usage view. Use `dryRun` and the knobs below before you launch.
+Take roughly **80–100k tokens per agent** as a planning figure, and expect a "small" run to cost a million tokens. That is six observations, not a guarantee, and the harness's "reported tokens" may count more than you'd expect, so check your own usage view. Use `dryRun` and the knobs below before you launch.
 
 **What they never do.** None of them pushes, publishes, sends, or deletes. The ones that touch your project are read-only. `plan-my-project` writes plan files, only under the folder you name.
 

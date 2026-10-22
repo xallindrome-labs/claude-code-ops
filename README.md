@@ -33,7 +33,7 @@ Every workflow follows the same idea: fan work out to cheaper models, then make 
 - `npm test` (Linux, macOS, Windows in CI): the workflow scripts against stubbed agents (arguments, phases, voting rules, failure handling, no silent caps) and the phone hook's decision logic, redaction and config handling. No tokens are spent.
 - The plugin and marketplace manifests pass `claude plugin validate`.
 - The phone hook's full round trip (a real prompt, a tap, the command running) was verified by hand on Windows only. Its "are you at the computer" check is Windows-only.
-- Each workflow has also been run once with real agents on Sonnet. Those runs found and fixed real bugs (see [docs/workflows.md](docs/workflows.md)) and gave us honest cost numbers: expect roughly 80–100k subagent tokens per agent, so even a small run is around a million tokens. Use `dryRun` first. It's one run per workflow, so treat the numbers as indicative and open an issue for anything odd.
+- Each workflow has also been run with real agents on Sonnet. Those runs found and fixed real bugs (see [docs/workflows.md](docs/workflows.md)) and gave us honest cost numbers: expect roughly 80–100k subagent tokens per agent, so even a small run is around a million tokens. Use `dryRun` first. Six runs in total, so treat the numbers as indicative and open an issue for anything odd.
 
 ## Built by Xallindrome
 
