@@ -248,3 +248,109 @@ test('design-panel: stops cleanly when too few designs are produced', async () =
   const { result } = await run('design-panel', { question: 'q' }, { failLabels: ['design:2', 'design:3', 'design:4', 'design:5'] });
   assert.match(result.error, /fewer than 2/);
 });
+
+// ---- cost lines, dry runs and receipts ----
+
+const DRY_ARGS = {
+  'release-readiness': { repo: '/tmp/r' },
+  'review-changes': { dimensions: ['security', 'tests'], maxPerDimension: 2 },
+  'plan-my-project': { stage: 'research', idea: 'x', angles: 3 },
+  'leak-finder': { sites: [{ name: 'A', url: 'https://a.example' }], verifyCap: 4 },
+  'design-panel': { question: 'q' },
+};
+const FULL_ARGS = {
+  'release-readiness': { repo: '/tmp/r' },
+  'review-changes': { dimensions: ['security', 'tests'], maxPerDimension: 2 },
+  'plan-my-project': { stage: 'research', idea: 'x', angles: 3 },
+  'leak-finder': { sites: [{ name: 'A', url: 'https://a.example' }], verifyCap: 4 },
+  'design-panel': { question: 'q' },
+};
+const FULL_CTX = { arrayLen: { files: 1, angles: 3 }, bools: { holdsUp: true, ran: true, real: true } };
+
+for (const name of Object.keys(DRY_ARGS)) {
+  test(`${name}: only the counting wrapper calls agent()`, () => {
+    const { body } = load(name);
+    const code = body.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+    assert.equal((code.match(/\bagent\(/g) ?? []).length, 1, 'exactly one agent( call: the wrapper');
+  });
+
+  test(`${name}: dryRun logs PLAN first and spawns no agents`, async () => {
+    const { result, calls, logs } = await run(name, { ...DRY_ARGS[name], dryRun: true });
+    assert.equal(calls.length, 0, 'no agent calls in a dry run');
+    assert.equal(result.dryRun, true);
+    assert.match(logs[0], new RegExp(`^PLAN ${name}:`));
+    assert.match(logs[0], /not estimated/);
+    assert.ok(!/\$\s?\d|\d\s?(k|M)?\s?tokens/i.test(logs[0]), 'PLAN must not contain token or dollar figures');
+  });
+
+  test(`${name}: real run logs PLAN first, DONE last, and the receipt matches the agents launched`, async () => {
+    const { result, calls, logs } = await run(name, FULL_ARGS[name], { ctx: { ...FULL_CTX, strings: { howToSeeTheChange: 'git diff' } } });
+    assert.match(logs[0], new RegExp(`^PLAN ${name}:`));
+    assert.match(logs.at(-1), new RegExp(`^DONE ${name}: ${calls.length} agents launched`));
+    assert.equal(result.receipt.launched, calls.length);
+    assert.ok(!/\$\s?\d|\d\s?(k|M)?\s?tokens/i.test(logs.at(-1)), 'DONE must not contain token or dollar figures');
+  });
+}
+
+test('plan floor and ceiling are consistent with what actually runs', async () => {
+  const dry = await run('review-changes', { dimensions: ['security', 'tests'], maxPerDimension: 2, dryRun: true });
+  const full = await run('review-changes', { dimensions: ['security', 'tests'], maxPerDimension: 2 }, { ctx: { ...FULL_CTX, arrayLen: { files: 1, findings: 5 }, strings: { howToSeeTheChange: 'git diff' } } });
+  assert.ok(full.calls.length >= dry.result.plan.min && full.calls.length <= dry.result.plan.max, `${full.calls.length} not in ${dry.result.plan.min}..${dry.result.plan.max}`);
+  const dp = await run('design-panel', { question: 'q', dryRun: true });
+  const dpFull = await run('design-panel', { question: 'q' });
+  assert.equal(dpFull.calls.length, dp.result.plan.agents, 'design-panel size is exact');
+});
+
+// ---- leak-finder: browser rule, dedupe, verify cap ----
+
+test('leak-finder: inspectors and verifiers are told not to use shared browser tools', async () => {
+  const { calls } = await run('leak-finder', FULL_ARGS['leak-finder'], { ctx: FULL_CTX });
+  const web = calls.filter(c => /^(inspect|verify):/.test(c.label));
+  assert.ok(web.length > 0 && web.every(c => /never use browser or computer-use tools/.test(c.prompt)));
+});
+
+test('plan-my-project: researchers are told not to use shared browser tools', async () => {
+  const { calls } = await run('plan-my-project', FULL_ARGS['plan-my-project'], { ctx: FULL_CTX });
+  const r = calls.filter(c => c.label.startsWith('research:'));
+  assert.ok(r.length > 0 && r.every(c => /do not use browser or computer-use tools/.test(c.prompt)));
+});
+
+test('leak-finder: duplicate leaks are merged before verification', async () => {
+  // 6 areas each report 1 leak; the dedupe agent says leaks 0-3 are one problem.
+  const { result, calls, logs } = await run('leak-finder', { sites: [{ name: 'A', url: 'https://a.example' }] }, {
+    ctx: { bools: { holdsUp: true } },
+    overrides: {
+      // each inspector reports under its own area name, so the merged leak can list all of them
+      'inspect:': opts => ({ ...fromSchema(opts.schema, {}), area: opts.label.split(':')[2] }),
+      'dedupe:': () => ({ groups: [{ members: [0, 1, 2, 3] }] }),
+    },
+  });
+  assert.equal(calls.filter(c => c.label.startsWith('verify:')).length, 3, '1 merged + 2 unique leaks verified, not 6');
+  assert.ok(logs.some(l => /6 observations merged into 3 distinct leaks/.test(l)));
+  assert.equal(result.sites[0].distinct, 3);
+  assert.equal(result.sites[0].confirmed[0].areas.length, 4, 'the merged leak remembers every area that reported it');
+});
+
+test('leak-finder: a bad dedupe answer is ignored, not trusted', async () => {
+  const { result } = await run('leak-finder', { sites: [{ name: 'A', url: 'https://a.example' }] }, {
+    ctx: { bools: { holdsUp: true } },
+    overrides: { 'dedupe:': () => ({ groups: [{ members: [99, -1, 1.5] }] }) },
+  });
+  assert.equal(result.sites[0].distinct, 6, 'out-of-range or non-integer indexes merge nothing');
+});
+
+test('leak-finder: verifyCap limits re-checks and the rest is reported as not re-checked', async () => {
+  const { result, calls, logs } = await run('leak-finder', { sites: [{ name: 'A', url: 'https://a.example' }], verifyCap: 2 }, { ctx: { bools: { holdsUp: true } } });
+  assert.equal(calls.filter(c => c.label.startsWith('verify:')).length, 2);
+  assert.equal(result.sites[0].notRechecked.length, 4);
+  assert.ok(logs.some(l => /4 leak\(s\) not re-checked/.test(l)));
+  assert.match(calls.find(c => c.label.startsWith('report:')).prompt, /NOT re-checked/);
+});
+
+test('leak-finder: verifier corrections reach the report prompt', async () => {
+  const { calls } = await run('leak-finder', { sites: [{ name: 'A', url: 'https://a.example' }], areas: ['lead-capture'] }, {
+    ctx: { bools: { holdsUp: true } },
+    overrides: { 'verify:': (opts) => ({ holdsUp: true, reason: 'ok', correction: 'THE CORRECTED WORDING' }) },
+  });
+  assert.ok(calls.find(c => c.label.startsWith('report:')).prompt.includes('THE CORRECTED WORDING'));
+});

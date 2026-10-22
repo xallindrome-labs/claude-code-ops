@@ -22,6 +22,24 @@ const license = args?.license ?? null
 const models = args?.models === null ? {} : { scan: 'sonnet', verify: 'sonnet', ...(args?.models ?? {}) }
 const m = stage => (models[stage] ? { model: models[stage] } : {})
 
+// ---- cost lines: counts only. Agent counts show the size of a run; tokens and dollars are not estimated here. ----
+const NAME = 'release-readiness'
+let launched = 0
+let failed = 0
+const byPhase = {}
+const run = async (prompt, opts) => {
+  launched++
+  const p = opts?.phase ?? 'other'
+  byPhase[p] = (byPhase[p] ?? 0) + 1
+  const r = await agent(prompt, opts)
+  if (r === null || r === undefined) failed++
+  return r
+}
+const receipt = () => ({ launched, failed, byPhase: { ...byPhase } })
+const MODEL_NOTE = 'bulk stages use ' + (Object.values(models).filter(Boolean).length ? [...new Set(Object.values(models).filter(Boolean))].join('/') : 'the session model') + '; the final summary uses the session model'
+const planLine = (size, knob) => 'PLAN ' + NAME + ': ' + size + '. ' + MODEL_NOTE + '. Smallest knob: ' + knob + '. Agent counts show size, not cost; tokens and dollars are not estimated here.'
+const doneLine = extra => 'DONE ' + NAME + ': ' + launched + ' agents launched' + (failed ? ', ' + failed + ' returned nothing' : '') + '. ' + (extra ? extra + ' ' : '') + 'Tokens are not measured here; see your session usage.'
+
 const RULES = `Hard rules: you are READ-ONLY on the repository at ${repo}. Do not edit, commit, push, publish or delete anything there.
 Only write inside a fresh temp directory you create yourself, and say so. Report facts you observed with the command and its output;
 if a tool is missing or a check could not run, say "not run" and why. Never invent results.`
@@ -120,17 +138,21 @@ Check .gitignore exists and covers the obvious. Large binaries and committed dep
   },
 ]
 
+// Floor is 7: 6 scans + 1 report. One verifier is added per blocker or warning, so the top is not known in advance.
+log(planLine('at least 7 agents (6 scans + 1 report, plus one verifier per blocker or warning)', 'args.models = null (inherit one model) or fewer findings to verify by fixing them first'))
+if (args?.dryRun === true) return { dryRun: true, plan: { min: 7, max: null, note: 'plus one verifier per blocker or warning' } }
+
 phase('Scan')
 const scans = (await parallel(CHECKS.map(c => () =>
-  agent(`${RULES}\n\n${c.prompt}`, { label: `scan:${c.key}`, phase: 'Scan', schema: FINDINGS, ...m('scan') })))).filter(Boolean)
-if (scans.length < CHECKS.length) log(`WARNING: ${CHECKS.length - scans.length} scan agent(s) failed and are missing from the report`)
+  run(`${RULES}\n\n${c.prompt}`, { label: `scan:${c.key}`, phase: 'Scan', schema: FINDINGS, ...m('scan') })))).filter(Boolean)
+if (scans.length < CHECKS.length) log(`WARNING: ${CHECKS.length - scans.length} scan run(s) failed and are missing from the report`)
 
 // Pipeline: each blocker/warning is verified independently as soon as the scans return.
 phase('Verify')
 const flat = scans.flatMap(s => s.findings.filter(f => f.severity !== 'info').map(f => ({ ...f, check: s.check })))
 log(`${flat.length} finding(s) to verify`)
 const checked = (await parallel(flat.map(f => () =>
-  agent(`${RULES}\n\nA scan reported this finding about ${repo}. Try to REFUTE it by re-running the check yourself.\n` +
+  run(`${RULES}\n\nA scan reported this finding about ${repo}. Try to REFUTE it by re-running the check yourself.\n` +
     `Check: ${f.check}\nSeverity: ${f.severity}\nTitle: ${f.title}\nWhere: ${f.where}\nEvidence: ${f.evidence}\n` +
     'Answer real=true only if you reproduced it. If uncertain or you cannot reproduce it, answer real=false and say why.',
   { label: `verify:${f.title.slice(0, 40)}`, phase: 'Verify', schema: VERDICT, ...m('verify') })
@@ -141,7 +163,7 @@ const confirmed = checked.filter(f => f.real)
 
 phase('Verdict')
 const notRun = scans.filter(s => !s.ran).map(s => `${s.check}: ${s.summary}`)
-const report = await agent(
+const report = await run(
   `Write the release-readiness report for ${repo}.\n` +
   `Confirmed findings (verified twice):\n${JSON.stringify(confirmed, null, 1)}\n\n` +
   `Findings that were refuted on re-check (do NOT report them as problems):\n${JSON.stringify(dropped.map(f => f.title))}\n\n` +
@@ -151,4 +173,5 @@ const report = await agent(
   'The markdown must list blockers first with the fix for each, then warnings, then what passed, then what was NOT run and why. Do not add findings of your own.',
   { label: 'verdict', phase: 'Verdict', schema: REPORT })
 
-return { ...report, confirmed, refuted: dropped.map(f => f.title), scans: scans.map(s => ({ check: s.check, ran: s.ran })) }
+log(doneLine(confirmed.length + ' confirmed finding(s), ' + dropped.length + ' refuted on re-check.'))
+return { ...report, receipt: receipt(), confirmed, refuted: dropped.map(f => f.title), scans: scans.map(s => ({ check: s.check, ran: s.ran })) }

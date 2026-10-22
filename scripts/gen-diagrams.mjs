@@ -46,7 +46,7 @@ const FLOWS = {
     subtitle: 'Where does a small business lose leads and time? Public pages only, evidence for every claim.',
     columns: [
       { title: 'Inspect', note: 'per site, 6 areas in parallel', boxes: [['Lead capture', 'cheap'], ['Booking path', 'cheap'], ['Follow-up', 'cheap'], ['Reputation', 'cheap'], ['Manual work', 'cheap'], ['Basics', 'cheap']] },
-      { title: 'Verify', note: 'medium + high leaks', boxes: [['Re-open the page; does it still hold?', 'cheap']] },
+      { title: 'Verify', note: 'merge, then check the top few', boxes: [['Merge duplicate leaks', 'cheap'], ['Re-open the page for the top 8; does it still hold?', 'cheap']] },
       { title: 'Report', note: 'per site', boxes: [['Top 3 leaks', 'result'], ['Quick wins', 'agent'], ['Questions for the diagnostic call', 'agent']] },
     ],
   },

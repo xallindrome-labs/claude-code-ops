@@ -24,6 +24,24 @@ const maxPer = args?.maxPerDimension ?? 6
 const models = args?.models === null ? {} : { review: 'sonnet', verify: 'sonnet', ...(args?.models ?? {}) }
 const m = stage => (models[stage] ? { model: models[stage] } : {})
 
+// ---- cost lines: counts only. Agent counts show the size of a run; tokens and dollars are not estimated here. ----
+const NAME = 'review-changes'
+let launched = 0
+let failed = 0
+const byPhase = {}
+const run = async (prompt, opts) => {
+  launched++
+  const p = opts?.phase ?? 'other'
+  byPhase[p] = (byPhase[p] ?? 0) + 1
+  const r = await agent(prompt, opts)
+  if (r === null || r === undefined) failed++
+  return r
+}
+const receipt = () => ({ launched, failed, byPhase: { ...byPhase } })
+const MODEL_NOTE = 'bulk stages use ' + (Object.values(models).filter(Boolean).length ? [...new Set(Object.values(models).filter(Boolean))].join('/') : 'the session model') + '; the final summary uses the session model'
+const planLine = (size, knob) => 'PLAN ' + NAME + ': ' + size + '. ' + MODEL_NOTE + '. Smallest knob: ' + knob + '. Agent counts show size, not cost; tokens and dollars are not estimated here.'
+const doneLine = extra => 'DONE ' + NAME + ': ' + launched + ' agents launched' + (failed ? ', ' + failed + ' returned nothing' : '') + '. ' + (extra ? extra + ' ' : '') + 'Tokens are not measured here; see your session usage.'
+
 const ALL_DIMENSIONS = {
   correctness: 'Logic errors, off-by-one, wrong conditions, broken edge cases, race conditions, wrong assumptions about inputs or ordering.',
   security: 'Injection, unsafe deserialization, path traversal, secrets in code or logs, missing authz/authn checks, unsafe defaults, SSRF, dependency risk.',
@@ -85,20 +103,26 @@ const REPORT = {
 
 const READONLY = `You are READ-ONLY. Do not edit files, commit, push or run anything that changes the repository. Working directory: ${cwd}.`
 
+// Floor: 1 scope + 1 per dimension + 1 report. Ceiling adds up to maxPerDimension findings x 3 skeptics per dimension.
+const FLOOR = wanted.length + 2
+const CEILING = wanted.length + 2 + wanted.length * maxPer * 3
+log(planLine(FLOOR + ' to ' + CEILING + ' agents (' + wanted.length + ' dimensions; up to ' + maxPer + ' findings per dimension, 3 skeptics each)', 'args.maxPerDimension, or fewer args.dimensions'))
+if (args?.dryRun === true) return { dryRun: true, plan: { min: FLOOR, max: CEILING } }
+
 phase('Scope')
-const scope = await agent(
+const scope = await run(
   `${READONLY}\nFind the change to review. Target: "${target}"${args?.base ? `, base branch: ${args.base}` : ''}.\n` +
   'Work out the exact git command(s) that show the diff (for a PR use `gh pr diff <n>`; for a branch, diff against the merge-base with the base branch; ' +
   'for "working tree", staged plus unstaged changes). List the changed files, and state what the change is meant to do (read commit messages and PR text). ' +
   'If the diff is huge (over ~3000 lines), say so in sizeNote.',
   { label: 'scope', phase: 'Scope', schema: SCOPE, ...m('review') })
-if (!scope || !scope.files.length) return { error: 'No change found to review', target, scope }
+if (!scope || !scope.files.length) return { error: 'No change found to review', target, scope, receipt: receipt() }
 log(`Reviewing ${scope.files.length} file(s): ${scope.howToSeeTheChange}`)
 
 // Each dimension flows through review -> verify independently (no barrier between stages).
 const results = await pipeline(
   wanted,
-  dim => agent(
+  dim => run(
     `${READONLY}\nYou are the ${dim.toUpperCase()} reviewer. Look ONLY for: ${ALL_DIMENSIONS[dim]}\n` +
     `Change under review (see it with: ${scope.howToSeeTheChange}). Intent: ${scope.intent}\n` +
     `Files: ${scope.files.join(', ')}\n` +
@@ -116,7 +140,7 @@ const results = await pipeline(
       'IMPACT: assuming it happens, is the stated severity honest? Would a maintainer care?',
     ]
     const verified = await parallel(kept.map(f => async () => {
-      const votes = (await parallel(lenses.map(lens => () => agent(
+      const votes = (await parallel(lenses.map(lens => () => run(
         `${READONLY}\nTry to REFUTE this review finding. Lens: ${lens}\n` +
         `Finding: ${f.title}\nFile: ${f.file}${f.line ? `:${f.line}` : ''}\nSeverity: ${f.severity}\nClaim: ${f.explanation}\n` +
         'Open the code. Answer refuted=true if you cannot make the claim hold, or if you are uncertain.',
@@ -136,7 +160,7 @@ log(`${survivors.length} finding(s) survived verification, ${rejected.length} we
 phase('Report')
 const rank = { high: 0, medium: 1, low: 2 }
 survivors.sort((a, b) => rank[a.severity] - rank[b.severity])
-const report = await agent(
+const report = await run(
   'Write the code-review report.\n' +
   `Change intent: ${scope.intent}\nFiles: ${scope.files.join(', ')}\n` +
   `Verified findings (each survived 3 independent refutation attempts; votes shown):\n${JSON.stringify(survivors, null, 1)}\n\n` +
@@ -145,4 +169,5 @@ const report = await agent(
   'End with one line on what was NOT reviewed (dimensions skipped, findings beyond the per-dimension cap). Do not add findings of your own.',
   { label: 'report', phase: 'Report', schema: REPORT })
 
-return { survivors, refutedCount: rejected.length, dimensions: wanted, scope, markdown: report?.markdown ?? null }
+log(doneLine(survivors.length + ' finding(s) survived, ' + rejected.length + ' refuted.'))
+return { survivors, refutedCount: rejected.length, dimensions: wanted, scope, markdown: report?.markdown ?? null, receipt: receipt() }
