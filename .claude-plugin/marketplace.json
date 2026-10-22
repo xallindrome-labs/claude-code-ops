@@ -1,0 +1,15 @@
+{
+  "name": "xallindrome-labs",
+  "owner": { "name": "Xallindrome Labs", "url": "https://xallindrome.co" },
+  "description": "Open-source tools for running Claude Code at scale, from Xallindrome.",
+  "plugins": [
+    {
+      "name": "ops-kit",
+      "source": "./plugins/ops-kit",
+      "description": "Run Claude Code unattended without losing control: /runway, phone approvals, subagent cost rules, and five multi-agent workflows.",
+      "version": "0.1.0",
+      "category": "productivity",
+      "tags": ["workflows", "subagents", "hooks", "automation"]
+    }
+  ]
+}

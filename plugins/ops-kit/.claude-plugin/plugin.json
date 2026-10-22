@@ -1,0 +1,10 @@
+{
+  "name": "ops-kit",
+  "description": "Run Claude Code unattended without losing control: /runway, phone approvals, subagent cost rules, and five multi-agent workflows.",
+  "version": "0.1.0",
+  "author": { "name": "Andrew Wilson", "url": "https://xallindrome.co" },
+  "homepage": "https://github.com/xallindrome-labs/claude-code-ops#readme",
+  "repository": "https://github.com/xallindrome-labs/claude-code-ops",
+  "license": "MIT",
+  "keywords": ["workflows", "subagents", "hooks", "notifications", "automation"]
+}

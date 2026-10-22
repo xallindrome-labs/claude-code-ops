@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh release *)",
+      "Bash(npm publish *)",
+      "Bash(npm publish)",
+      "Bash(vercel deploy *)",
+      "Bash(vercel --prod*)",
+      "Bash(vercel promote *)",
+      "Bash(cdk deploy *)",
+      "Bash(npx cdk deploy *)",
+      "Bash(aws s3 sync *)",
+      "Bash(aws s3 cp *)",
+      "Bash(aws s3 rm *)",
+      "Bash(aws cloudfront create-invalidation *)",
+      "Bash(rm -r *)",
+      "Bash(rm -rf *)",
+      "Bash(git clean *)",
+      "Bash(git branch -D *)",
+      "Bash(git reset --hard*)",
+      "PowerShell(Remove-Item *)"
+    ]
+  }
+}

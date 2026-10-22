@@ -1,0 +1,12 @@
+{
+  "name": "claude-code-ops-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test and build scripts for the ops-kit Claude Code plugin marketplace.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/workflows.test.mjs test/hooks/phone-approve.test.js test/hooks/phone-nudge.test.js",
+    "diagrams": "node scripts/gen-diagrams.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
